@@ -132,7 +132,7 @@ def update_attendance_count():
 # Create the main window
 window = tk.Tk()
 window.title("IFS AML Seminar Attendance Checker")
-window.geometry("400x250")  # Set the window size
+window.geometry("400x300")  # Set the window size
 
 # Create the label and entry field for 中介人一戶通QR Code
 label = tk.Label(window, text="輸入中介人一戶通QR Code:")
@@ -145,7 +145,7 @@ entry.focus()  # Set focus on the entry field
 window.bind('<Return>', check_registration)
 
 # Create the attendance count label
-attendance_count_label = tk.Label(window, text="已入場人數: 0")
+attendance_count_label = tk.Label(window, text="已入場人數: 0", font=("Arial", 24, "bold"), padx=20, pady=10)
 attendance_count_label.pack()
 
 # Create the menu bar
