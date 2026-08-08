@@ -1,0 +1,22 @@
+[package]
+name = "ifs-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "IFS AML Seminar Attendance — single-exe Windows kiosk (eframe)"
+default-run = "ifs_attendance"
+
+# One binary name for shipping (Windows: ifs_attendance.exe).
+[[bin]]
+name = "ifs_attendance"
+path = "src/main.rs"
+
+[dependencies]
+ifs-core = { workspace = true }
+ifs-storage = { workspace = true }
+eframe = { version = "0.31", default-features = true, features = ["default_fonts"] }
+rfd = "0.15"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+# Keep bundled so SQLite is compiled into the exe (no sqlite3.dll).
+rusqlite = { version = "0.32", features = ["bundled"] }

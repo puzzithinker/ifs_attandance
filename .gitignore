@@ -1,0 +1,20 @@
+/target/
+/dist/
+**/*.rs.bk
+*.pdb
+.DS_Store
+
+# Runtime data next to the ship binary (never commit)
+/agent.db
+/agent.db.bak*
+/master.db
+*.pre-rust-*.bak
+/station.toml
+**/station.toml
+
+# Legacy / local binaries and archives
+/ifs_app.exe
+/ifs_app.py
+/*.zip
+/*.7z
+/target/**

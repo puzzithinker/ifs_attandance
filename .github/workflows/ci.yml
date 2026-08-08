@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test workspace
+        run: cargo test --workspace
+      - name: Smoke binary
+        run: |
+          cargo run -p ifs-app --bin ifs_attendance -- --smoke --db "$RUNNER_TEMP/smoke.db"
+          cargo run -p ifs-app --bin ifs_attendance -- --smoke --db "$RUNNER_TEMP/smoke.db"
+      - name: Release single binary
+        run: |
+          cargo build --release -p ifs-app
+          test -x target/release/ifs_attendance
+          ls -lh target/release/ifs_attendance

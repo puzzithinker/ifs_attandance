@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ifs-core",
+    "crates/ifs-storage",
+    "crates/ifs-app",
+]
+default-members = ["crates/ifs-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["IFS Attendance"]
+
+[workspace.dependencies]
+ifs-core = { path = "crates/ifs-core" }
+ifs-storage = { path = "crates/ifs-storage" }
+thiserror = "2"
+url = "2"
+serde = { version = "1", features = ["derive"] }
+
+# Single-exe shipping: one binary, SQLite statically linked via rusqlite "bundled".
+# Windows: target/release/ifs_attendance.exe (no Python, no extra app DLLs).
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = 3

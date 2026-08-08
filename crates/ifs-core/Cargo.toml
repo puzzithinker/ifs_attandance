@@ -1,0 +1,12 @@
+[package]
+name = "ifs-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure domain logic for IFS attendance (QR parse, check-in/out decisions)"
+
+[dependencies]
+thiserror = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
