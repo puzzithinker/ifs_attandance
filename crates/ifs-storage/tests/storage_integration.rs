@@ -123,11 +123,13 @@ fn csv_bom_headers_and_checkout_column() {
     r.apply_mode(AttendanceMode::CheckOut, &id, "2026-08-08T10:00:00")
         .unwrap();
     let path = dir.path().join("out.csv");
-    let n = r.export_csv(&path).unwrap();
+    let n = r.export_csv(&path, "Demo Event").unwrap();
     assert_eq!(n, 1);
     let bytes = fs::read(&path).unwrap();
     assert_eq!(&bytes[0..3], &[0xEF, 0xBB, 0xBF]);
     let text = String::from_utf8(bytes[3..].to_vec()).unwrap();
+    assert!(text.contains("event,ID,"));
+    assert!(text.contains("Demo Event"));
     assert!(text.contains("保險中介人類別"));
     assert!(text.contains("保險中介人編號"));
     assert!(text.contains("入場時間"));
@@ -135,10 +137,11 @@ fn csv_bom_headers_and_checkout_column() {
     assert!(text.contains("2026-08-08T09:00:00"));
     assert!(text.contains("2026-08-08T10:00:00"));
 
-    let name = default_export_filename(chrono::Local::now());
-    assert!(name.starts_with("IFS_AML_seminar_attendance_"));
+    let name = default_export_filename(chrono::Local::now(), "Demo Event");
+    assert!(name.starts_with("IFS_attendance_"));
     assert!(name.ends_with(".csv"));
     assert!(name.contains("-"));
+    assert!(name.contains("Demo"));
 }
 
 #[test]
@@ -201,9 +204,10 @@ fn soft_checkout_orphan_and_cross_station_pair() {
     assert_eq!(rollup.rows[0].status, MasterStatus::Left);
 
     let master_csv = dir.path().join("master.csv");
-    export_master_csv(&master_csv, &rollup.rows).unwrap();
+    export_master_csv(&master_csv, &rollup.rows, "CrossDoor").unwrap();
     let text = fs::read_to_string(&master_csv).unwrap();
     assert!(text.contains("MULTI1"));
+    assert!(text.contains("CrossDoor"));
 }
 
 /// Regression: master drops idx_visits_one_open; second open must not fail migrate verify.
@@ -371,14 +375,29 @@ fn master_csv_bom_and_status_headers() {
     let rm = SqliteVisitRepository::new(&conn_m, st_m, DbRole::Master);
     let rollup = rollup_master(&rm.list_visit_snapshots().unwrap(), &[]);
     let csv_path = dir.path().join("master.csv");
-    let n = export_master_csv(&csv_path, &rollup.rows).unwrap();
+    let n = export_master_csv(&csv_path, &rollup.rows, "MasterEvt").unwrap();
     assert_eq!(n, 1);
     let bytes = fs::read(&csv_path).unwrap();
     assert_eq!(&bytes[0..3], &[0xEF, 0xBB, 0xBF]);
     let text = String::from_utf8_lossy(&bytes[3..]);
+    assert!(text.contains("event,保險中介人類別"));
     assert!(text.contains("first_check_in_at"));
     assert!(text.contains("needs_review"));
     assert!(text.contains("MCSV"));
+    assert!(text.contains("MasterEvt"));
+}
+
+#[test]
+fn event_name_meta_survives_reopen() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("ev.db");
+    {
+        let (conn, _, _) = open_database_with_station(&path, DbRole::Desk).unwrap();
+        ifs_storage::set_event_name(&conn, "持久活動").unwrap();
+        drop(conn);
+    }
+    let (conn2, _, _) = open_database_with_station(&path, DbRole::Desk).unwrap();
+    assert_eq!(ifs_storage::get_event_name(&conn2).unwrap(), "持久活動");
 }
 
 #[test]

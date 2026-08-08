@@ -24,7 +24,7 @@ fi
 cp -f "$SRC" "$DEST"
 # Optional friendlier Windows name next to ship folder
 if [[ -f "$ROOT/target/release/ifs_attendance.exe" ]]; then
-  cp -f "$ROOT/target/release/ifs_attendance.exe" "$OUT_DIR/IFS_AML_Attendance.exe"
+  cp -f "$ROOT/target/release/ifs_attendance.exe" "$OUT_DIR/IFS_Event_Attendance.exe"
 fi
 
 ls -lh "$DEST"

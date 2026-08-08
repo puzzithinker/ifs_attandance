@@ -1,8 +1,10 @@
-# User guide — IFS AML Seminar Attendance
+# User guide — IFS Event Attendance（活動出席）
+
+**完整繁體中文操作手冊（含多站點）：[USER_GUIDE_zh-Hant.md](./USER_GUIDE_zh-Hant.md)**
 
 ## What this app does
 
-At an IFS AML seminar, insurance intermediaries (agents) scan a **中介人一戶通 QR Code**. The app records:
+At any IFS event (seminar, training, briefing, …), participants scan a **中介人一戶通 QR Code**. The app records:
 
 - **入場 (check-in)** — agent entered  
 - **離場 (check-out)** — agent left  
@@ -49,41 +51,60 @@ Keep `station_id` stable for the life of that laptop’s data. Rename only `stat
 
 ### Screen layout
 
-- **Header** — Desk vs Master, File/Help menus  
-- **Mode pills** — large **入場** (green) / **離場** (orange)  
-- **QR field** — always ready for scanner (keyboard wedge + Enter)  
-- **目前在場** / **累計人次** — live counts on **this** machine only  
-- **狀態 banner** — last result (green / amber / red / blue)
+- **Header** — live **clock**, activity/event name, menus  
+- **檢視** menu — 全螢幕 (F11), 音效開關, **活動/站點設定**  
+- **Mode pills** — **入場** (green) / **離場** (orange)  
+- **QR field** — scanner + Enter  
+- **Metrics** — 目前在場 / 累計人次 / 本機成功 (desk); 總出席 / 需覆核 / 仍在場 (master)  
+- **最近一次掃描** — outcome + identity + **N 秒前**  
+- **本機近期掃描** — last ~12 rows with **複製** (copies 類別·編號)  
+- **主控儀表板** (master only) — needs_review count + still-inside / review previews from rollup  
+
+### Settings (檢視 → 活動 / 站點設定)
+
+| Field | Stored in | Effect |
+|-------|-----------|--------|
+| 活動名稱 | `app_meta.event_name` | CSV `event` column + export filename slug |
+| 站點顯示名 | `station.toml` | Shown in UI; station packages |
+
+Restart reloads both for the same DB folder.
 
 ### Workflow
 
-1. Choose mode:
-   - **入場** for entry queue  
-   - **離場** for exit queue  
-2. Focus stays on the scan box.  
-3. Scanner pastes the QR URL and sends **Enter**.  
-4. Field clears automatically. Status updates.
+1. Set **活動名稱** / **站點** once if needed.  
+2. Choose **入場** or **離場**.  
+3. Scan QR (Enter). Field clears; result card + history update; optional **beep**.  
+4. Use **複製** on recent rows to copy identity to clipboard.
 
-### Status messages (Chinese)
+### Last scan result (what the big card means)
 
-| Banner text | Meaning | Tone |
-|-------------|---------|------|
-| 已登記入場 | New check-in stored | Green |
-| 已在場內 (重複入場) | Already open visit on **this** desk | Amber |
-| 已登記離場 | Check-out closed an open visit on **this** desk | Green |
-| 已登記離場 (跨站點) | Soft check-out: leave recorded without local check-in | Blue |
-| 尚未入場，無法離場 | Soft check-out **off** and no local open visit | Amber |
-| QR Code 無效 | Missing/empty `categoryCode` or `licenseNo` | Red |
-| 請掃描 QR Code | Empty scan | Gray |
-| 操作失敗: … | Storage/system error | Red |
+| Headline | Meaning | Tone |
+|----------|---------|------|
+| 入場成功 | New check-in stored | Green |
+| 重複入場 | Already open on **this** desk; not written again | Amber |
+| 離場成功 | Closed open visit on **this** desk | Green |
+| 跨站點離場 | Soft leave recorded (entry may be on another laptop) | Blue |
+| 無法離場 | Soft check-out off and no local open visit | Amber |
+| QR 無效 | Missing/empty category or license | Red |
+| 操作失敗 | Storage/system error | Red |
+
+The card also shows **category · license**, explanation, wall time, and **how long ago** the scan was.
+
+### Keyboard / kiosk
+
+| Key / control | Action |
+|---------------|--------|
+| **F11** or 檢視 → 全螢幕 | Toggle fullscreen |
+| 檢視 → 音效 | Toggle success/fail beep (default **on**; stored in DB) |
 
 ### Export CSV (this desk only)
 
 **檔案 → 匯出出席 CSV…**
 
 - UTF-8 with BOM (Excel-friendly)  
-- Columns include category, license, 入場時間, 離場時間, station_id, visit_uid  
-- Default name like `IFS_AML_seminar_attendance_07-August.csv` (English month names)
+- Columns: **event**, ID, category, license, 入場/離場 times, station_id, visit_uid  
+- Filename includes event slug when set, e.g. `IFS_attendance_CPD_07-August.csv`
+- Default name like `IFS_attendance_07-August.csv` (English month names)
 
 This export is **one laptop’s data**, not the whole venue.
 

@@ -3,7 +3,7 @@ name = "ifs-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "IFS AML Seminar Attendance — single-exe Windows kiosk (eframe)"
+description = "IFS Event Attendance — single-exe Windows kiosk (eframe)"
 default-run = "ifs_attendance"
 
 # One binary name for shipping (Windows: ifs_attendance.exe).

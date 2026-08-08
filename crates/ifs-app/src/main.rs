@@ -1,21 +1,23 @@
-//! IFS AML Seminar Attendance — eframe GUI + CLI smoke mode.
+//! IFS Event Attendance — eframe GUI + CLI smoke mode.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
 mod fonts;
 mod paths;
+mod sound;
 mod theme;
+mod ui_format;
 
 use clap::Parser;
-use ifs_storage::{open_database_with_station, DbRole};
+use ifs_storage::{get_event_name, open_database_with_station, DbRole};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "ifs_attendance",
-    about = "IFS AML Seminar Attendance (single-exe kiosk)"
+    about = "IFS Event Attendance — 活動出席 kiosk (single-exe)"
 )]
 struct Args {
     /// Path to SQLite database (default: ./agent.db or next to exe).
@@ -58,22 +60,25 @@ fn main() -> ExitCode {
 }
 
 fn run_smoke(db_path: &std::path::Path, role: DbRole) -> ExitCode {
-    println!("ifs_attendance {} smoke", env!("CARGO_PKG_VERSION"));
+    println!("IFS Event Attendance {} smoke", env!("CARGO_PKG_VERSION"));
     println!("db={}", db_path.display());
     match open_database_with_station(db_path, role) {
         Ok((conn, report, station)) => {
             let repo = ifs_storage::SqliteVisitRepository::new(&conn, station.clone(), role);
             let counts = repo.counts().unwrap_or_default();
+            let event = get_event_name(&conn).unwrap_or_default();
             println!(
-                "station={} ({}) migrate={}->{} inside={} visits={}",
+                "station={} ({}) migrate={}->{} inside={} visits={} event={}",
                 station.station_name,
                 station.station_id,
                 report.from_version,
                 report.to_version,
                 counts.currently_inside,
-                counts.total_visits
+                counts.total_visits,
+                if event.is_empty() { "(none)" } else { &event }
             );
             println!("modes: 入場 Check-In | 離場 Check-Out");
+            println!("gui: event/station editors, clock, copy, master dashboard, F11, sound");
             println!(
                 "status sample: {}",
                 ifs_core::message_zh(&ifs_core::ScanOutcome::EmptyInput)

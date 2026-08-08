@@ -174,9 +174,9 @@ impl<'a> SqliteVisitRepository<'a> {
         })
     }
 
-    pub fn export_csv(&self, path: &Path) -> Result<u64, StorageError> {
+    pub fn export_csv(&self, path: &Path, event_name: &str) -> Result<u64, StorageError> {
         let visits = self.list_visit_snapshots()?;
-        write_visits_csv(path, &visits)
+        write_visits_csv(path, &visits, event_name)
     }
 
     pub fn list_visit_snapshots(&self) -> Result<Vec<VisitSnapshot>, StorageError> {
@@ -218,8 +218,8 @@ impl<'a> SqliteVisitRepository<'a> {
         Ok(rows)
     }
 
-    pub fn default_export_name(&self) -> String {
-        default_export_filename(chrono::Local::now())
+    pub fn default_export_name(&self, event_name: &str) -> String {
+        default_export_filename(chrono::Local::now(), event_name)
     }
 }
 

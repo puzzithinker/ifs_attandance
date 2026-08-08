@@ -1,4 +1,4 @@
-//! Pure domain logic for IFS AML seminar attendance.
+//! Pure domain logic for IFS event attendance (check-in / check-out).
 //!
 //! No I/O: QR parsing, check-in/check-out decisions, Chinese messages, master rollup.
 

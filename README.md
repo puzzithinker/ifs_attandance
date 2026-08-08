@@ -1,13 +1,14 @@
-# IFS Attendance (Rust) — single exe
+# IFS Event Attendance (Rust) — single exe
 
-Windows-oriented kiosk for IFS AML seminar **check-in / check-out** (Rust single-exe).
+Windows-oriented kiosk for **any IFS event** check-in / check-out (Rust single-exe).
 
 ## Documentation (start here)
 
 | Doc | Purpose |
 |-----|---------|
 | **[docs/README.md](docs/README.md)** | Index of all docs |
-| **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** | Operators & admin day-of guide |
+| **[docs/USER_GUIDE_zh-Hant.md](docs/USER_GUIDE_zh-Hant.md)** | **繁中完整操作手冊（含多站點）** |
+| **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** | Operators & admin (English summary) |
 | **[docs/MULTI_STATION.md](docs/MULTI_STATION.md)** | Check-in at A, check-out at B (soft check-out + master merge) |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Crates, schema, APIs, packaging |
 | **[docs/CUTOVER.md](docs/CUTOVER.md)** | Deploy / backup / first-event checklist |

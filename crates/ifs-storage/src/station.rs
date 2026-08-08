@@ -101,4 +101,16 @@ mod tests {
         let (b, _) = load_or_create_station(&db).unwrap();
         assert_eq!(a.station_id, b.station_id);
     }
+
+    #[test]
+    fn rename_station_persists() {
+        let dir = tempdir().unwrap();
+        let db = dir.path().join("agent.db");
+        let (mut info, path) = load_or_create_station(&db).unwrap();
+        info.station_name = "出口-2".into();
+        write_station_file(&path, &info).unwrap();
+        let (again, _) = load_or_create_station(&db).unwrap();
+        assert_eq!(again.station_name, "出口-2");
+        assert_eq!(again.station_id, info.station_id);
+    }
 }
