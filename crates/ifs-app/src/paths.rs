@@ -25,7 +25,10 @@ mod tests {
     #[test]
     fn cli_path_wins() {
         let p = Path::new("/data/event/agent.db");
-        assert_eq!(resolve_db_path(Some(p)), PathBuf::from("/data/event/agent.db"));
+        assert_eq!(
+            resolve_db_path(Some(p)),
+            PathBuf::from("/data/event/agent.db")
+        );
     }
 
     #[test]

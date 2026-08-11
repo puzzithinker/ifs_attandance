@@ -3,10 +3,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod feedback;
 mod fonts;
 mod paths;
 mod sound;
 mod theme;
+mod ui;
 mod ui_format;
 
 use clap::Parser;

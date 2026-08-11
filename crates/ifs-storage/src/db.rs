@@ -60,5 +60,3 @@ pub fn open_in_memory() -> Result<(Connection, MigrateReport), StorageError> {
     let report = migrate(&mut conn)?;
     Ok((conn, report))
 }
-
-

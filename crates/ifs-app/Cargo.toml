@@ -18,5 +18,3 @@ eframe = { version = "0.31", default-features = true, features = ["default_fonts
 rfd = "0.15"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive"] }
-# Keep bundled so SQLite is compiled into the exe (no sqlite3.dll).
-rusqlite = { version = "0.32", features = ["bundled"] }

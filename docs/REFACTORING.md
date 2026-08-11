@@ -6,35 +6,23 @@ This is a **backlog of improvements**, not unfinished work. The system is usable
 
 ## High value / low risk
 
-### 1. Split `SqliteVisitRepository` vs connection ownership
+### 1. Split `SqliteVisitRepository` vs connection ownership — ✅ Done
 
-**Today:** GUI holds `rusqlite::Connection` and builds a short-lived repository each call.
+`AttendanceStore` (`ifs-storage::store`) owns the `Connection` + `StationInfo` + `DbRole` + `soft_checkout` and exposes `handle_scan`, `counts`, `master_rollup_rows`, CSV/package export/import, event name, sound flag, `rename_station`. `ifs-app` no longer depends on `rusqlite` (dropped from its `Cargo.toml`; `bundled` still comes via `ifs-storage` feature unification, so the single-exe static SQLite guarantee is unchanged).
 
-**Refactor:** `struct AttendanceStore { conn, station, role, soft }` owned by the app; methods `apply`, `counts`, `export`. Removes `rusqlite` from `ifs-app`’s direct dependency surface.
+### 2. Single orchestration function for “scan string → outcome” — ✅ Done
 
-### 2. Single orchestration function for “scan string → outcome”
-
-**Today:** GUI parses, then `apply_mode`, then messages.
-
-**Refactor in core or a thin `ifs-service`:**
-
-```rust
-fn handle_scan(input, mode, soft, clock, repo) -> ScanOutcome
-```
-
-Makes GUI and CLI share one path; easier testing of invalid QR → no DB write.
+`AttendanceStore::handle_scan(raw, mode, at) -> ScanResult` — parse → apply → outcome, never returns `Err` (parse failures → `InvalidQr`/`EmptyInput`, DB failures → `Failed`), with `identity: Option<AgentIdentity>` so the UI can show the subject even on DB failure. Covered by storage unit tests (duplicate check-in writes nothing, garbage QR writes nothing, etc.). The timestamp is caller-supplied (clock injection at the call site).
 
 ### 3. Clock injection everywhere
 
-**Today:** `now_iso` passed into `apply_mode`; good for domain. Package timestamps use `now_iso_local()` internally.
+**Today:** `now_iso` passed into `handle_scan`/`apply_mode`; good for domain. Package timestamps use `now_iso_local()` internally.
 
 **Refactor:** pass `impl Fn() -> String` or `trait Clock` into storage for fully deterministic package/export tests.
 
-### 4. Extract UI widgets
+### 4. Extract UI widgets — ✅ Done
 
-**Today:** mode pills / metric cards / status banner live in `app.rs`.
-
-**Refactor:** `ui/mode_pills.rs`, `ui/metrics.rs`, `ui/status_banner.rs` for readability and future snapshot tests.
+`ifs-app/src/ui/`: `top_bar`, `mode_selector` (pills + scan card), `metrics`, `status_banner` (session chips + last result), `recent_list`, `master_dashboard`, `settings` (floating `egui::Window`). Pure outcome→UI mapping lives in `ifs-app/src/feedback.rs` with unit tests for every `ScanOutcome` variant; `app.rs` (~480 lines) keeps only state, orchestration, and actions. Same pass also fixed: Enter now submits via `lost_focus() && Enter` only; scan field auto-reclaims focus when nothing else has it (kiosk scanner safety); system messages (export/關於/settings) no longer pollute the recent-scan list, session counters, or scan sounds.
 
 ---
 
@@ -99,7 +87,7 @@ Design already allows Slint fallback (K1b). Would rewrite presentation only if c
 | `ifs-core` integration module tests file | Keep unit modules small |
 | Golden files under `testdata/` for CSV bytes | Catch BOM/header regressions |
 | Property tests for rollup (proptest) | Random in/out sequences |
-| GUI: extract pure “view model” | Test status tone without eframe |
+| ~~GUI: extract pure “view model”~~ ✅ `feedback.rs` | Tone/headline/detail tested without eframe |
 
 ---
 
@@ -114,9 +102,9 @@ Design already allows Slint fallback (K1b). Would rewrite presentation only if c
 
 ## Suggested order if you continue engineering
 
-1. `handle_scan` orchestration + more integration tests (this pass already deepens tests)  
-2. `AttendanceStore` ownership cleanup  
-3. UI module split  
+1. ~~`handle_scan` orchestration~~ ✅, ~~`AttendanceStore` ownership~~ ✅, ~~UI module split~~ ✅  
+2. Clock injection in storage internals (item 3)  
+3. Error type unification (item 8)  
 4. Only then event-sourcing or live LAN  
 
 Keep shipping the single exe; refactors should not force multi-file installs.

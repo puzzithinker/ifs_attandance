@@ -51,8 +51,7 @@ pub fn migrate(conn: &mut Connection) -> Result<MigrateReport, StorageError> {
     if from == 0 && table_exists(&tx, "visits") {
         if !v2_indexes_complete(&tx) && !v1_indexes_complete(&tx) {
             return Err(StorageError::Migration(
-                "incomplete schema (visits present but user_version=0); restore file backup"
-                    .into(),
+                "incomplete schema (visits present but user_version=0); restore file backup".into(),
             ));
         }
     }
@@ -255,10 +254,7 @@ fn ensure_column(
         .query_map([], |r| r.get::<_, String>(1))?
         .collect::<Result<_, _>>()?;
     if !cols.iter().any(|c| c == col) {
-        tx.execute(
-            &format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"),
-            [],
-        )?;
+        tx.execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"), [])?;
     }
     Ok(())
 }

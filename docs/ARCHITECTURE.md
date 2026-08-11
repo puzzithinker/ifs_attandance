@@ -47,6 +47,7 @@
 | `db` | `open_database`, `open_database_with_station`, `open_in_memory` |
 | `migrate` | `PRAGMA user_version` 0→2, legacy `attendance` import |
 | `repository` | `SqliteVisitRepository::apply_mode`, counts, list snapshots |
+| `store` | `AttendanceStore` — owns the `Connection`; `handle_scan`, counts, rollup, exports, packages, meta |
 | `export` | UTF-8-BOM CSV, English month filenames, master CSV |
 | `package` | Station package export/import (idempotent by uid) |
 | `station` | `station.toml` load/create |
@@ -57,10 +58,14 @@
 | Module | Responsibility |
 |--------|----------------|
 | `main` | CLI (`clap`), `--smoke` / `--master` / `--db` |
-| `app` | egui kiosk UI |
+| `app` | App state, actions, `update` orchestration |
+| `ui/*` | Panels: `top_bar`, `mode_selector` (pills + scan card), `metrics`, `status_banner`, `recent_list`, `master_dashboard`, `settings` |
+| `feedback` | Pure outcome → tone/headline/detail mapping (unit-tested) |
 | `theme` | Colors, cards, status tones |
 | `fonts` | System CJK load strategy |
 | `paths` | Resolve default DB path |
+
+`ifs-app` has **no `rusqlite` dependency** — all persistence goes through `AttendanceStore`.
 
 Binary name: **`ifs_attendance`** (single exe).
 
@@ -120,15 +125,16 @@ Python `attendance(保險中介人類別, 保險中介人編號, timestamp)` →
 ### Scan (desk)
 
 ```text
-Enter on scan field
-  → parse_qr_url
-  → apply_mode(mode, identity, now)
-       BEGIN
-       load open visit
-       decide_scan(...)
-       apply PersistCommand + scan_events
-       COMMIT
-  → message_zh + counts refresh
+Enter on scan field (lost_focus && Enter; auto-refocus when idle)
+  → AttendanceStore::handle_scan(raw, mode, now)
+       parse_qr_url ──err──► outcome_from_parse_error (no DB write)
+       apply_mode(mode, identity, now)
+            BEGIN
+            load open visit
+            decide_scan(...)
+            apply PersistCommand + scan_events
+            COMMIT
+  → feedback.rs tone/headline/detail + counts refresh
 ```
 
 ### Master merge
@@ -153,6 +159,7 @@ rollup_master(&[VisitSnapshot], &[CheckoutEvent]) -> PairingResult
 
 // ifs-storage
 open_database_with_station(path, DbRole) -> (Connection, MigrateReport, StationInfo)
+AttendanceStore::open / handle_scan / counts / master_rollup_rows / export_* / import_package
 SqliteVisitRepository::apply_mode / counts / export_csv / list_*
 export_station_package / import_station_package
 default_export_filename / export_master_csv

@@ -41,8 +41,7 @@ pub fn export_station_package(
 
     let conn = Connection::open(dest_db)?;
     let visit_count: u64 = conn.query_row("SELECT COUNT(*) FROM visits", [], |r| r.get(0))?;
-    let event_count: u64 =
-        conn.query_row("SELECT COUNT(*) FROM scan_events", [], |r| r.get(0))?;
+    let event_count: u64 = conn.query_row("SELECT COUNT(*) FROM scan_events", [], |r| r.get(0))?;
     drop(conn);
 
     let manifest = PackageManifest {
@@ -56,7 +55,8 @@ pub fn export_station_package(
     let man_path = dest_db.with_extension("manifest.json");
     fs::write(
         man_path,
-        serde_json::to_string_pretty(&manifest).map_err(|e| StorageError::Package(e.to_string()))?,
+        serde_json::to_string_pretty(&manifest)
+            .map_err(|e| StorageError::Package(e.to_string()))?,
     )?;
     Ok(manifest)
 }
@@ -166,7 +166,12 @@ pub fn import_station_package(
     tx.execute(
         "INSERT INTO import_audit(station_id, imported_at, rows_inserted, rows_skipped)
          VALUES (?1, ?2, ?3, ?4)",
-        params![station_id, now_iso_local(), rows_inserted as i64, rows_skipped as i64],
+        params![
+            station_id,
+            now_iso_local(),
+            rows_inserted as i64,
+            rows_skipped as i64
+        ],
     )?;
 
     // Master must not enforce global one-open across stations (import may add dual opens).

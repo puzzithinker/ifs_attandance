@@ -75,20 +75,18 @@ pub fn apply(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
     style.spacing.item_spacing = egui::vec2(10.0, 8.0);
     style.spacing.button_padding = egui::vec2(14.0, 8.0);
-    style.text_styles.insert(
-        egui::TextStyle::Heading,
-        egui::FontId::proportional(26.0),
-    );
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, egui::FontId::proportional(26.0));
     style
         .text_styles
         .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
     style
         .text_styles
         .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
-    style.text_styles.insert(
-        egui::TextStyle::Monospace,
-        egui::FontId::monospace(14.0),
-    );
+    style
+        .text_styles
+        .insert(egui::TextStyle::Monospace, egui::FontId::monospace(14.0));
     ctx.set_style(style);
 }
 

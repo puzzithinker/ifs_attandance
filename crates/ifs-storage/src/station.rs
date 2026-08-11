@@ -77,9 +77,8 @@ fn parse_station_toml(text: &str) -> Result<StationInfo, StorageError> {
             }
         }
     }
-    let station_id = station_id.ok_or_else(|| {
-        StorageError::Config("station.toml missing station_id".into())
-    })?;
+    let station_id =
+        station_id.ok_or_else(|| StorageError::Config("station.toml missing station_id".into()))?;
     let station_name = station_name.unwrap_or_else(|| "desk".into());
     if station_id.is_empty() {
         return Err(StorageError::Config("station_id empty".into()));

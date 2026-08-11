@@ -25,9 +25,7 @@ pub fn format_seconds_ago(secs: u64) -> String {
 
 /// Seconds between `then` and `now` (clamped; 0 if then is in the future).
 pub fn elapsed_secs(then: SystemTime, now: SystemTime) -> u64 {
-    now.duration_since(then)
-        .unwrap_or(Duration::ZERO)
-        .as_secs()
+    now.duration_since(then).unwrap_or(Duration::ZERO).as_secs()
 }
 
 /// Clipboard / copy payload for a recent scan identity.

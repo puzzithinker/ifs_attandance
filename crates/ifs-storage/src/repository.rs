@@ -106,14 +106,7 @@ impl<'a> SqliteVisitRepository<'a> {
         );
 
         if let Some(cmd) = cmd {
-            match apply_command(
-                &tx,
-                &cmd,
-                &self.station,
-                now_iso,
-                open_visit_uid,
-                &outcome,
-            ) {
+            match apply_command(&tx, &cmd, &self.station, now_iso, open_visit_uid, &outcome) {
                 Ok(()) => {}
                 Err(StorageError::Sqlite(e)) if is_unique_violation(&e) => {
                     // Re-read open visit
@@ -159,9 +152,9 @@ impl<'a> SqliteVisitRepository<'a> {
             [],
             |r| r.get(0),
         )?;
-        let total_visits: u64 =
-            self.conn
-                .query_row("SELECT COUNT(*) FROM visits", [], |r| r.get(0))?;
+        let total_visits: u64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM visits", [], |r| r.get(0))?;
         let unique_agents: u64 = self.conn.query_row(
             "SELECT COUNT(*) FROM (SELECT DISTINCT category, license_no FROM visits)",
             [],
