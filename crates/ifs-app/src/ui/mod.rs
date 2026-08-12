@@ -3,6 +3,7 @@
 pub mod master_dashboard;
 pub mod metrics;
 pub mod mode_selector;
+pub mod open_db;
 pub mod recent_list;
 pub mod settings;
 pub mod status_banner;

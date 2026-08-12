@@ -137,7 +137,7 @@ pub fn show_scan_card(app: &mut AttendanceApp, ui: &mut egui::Ui, ctx: &egui::Co
         // If Desk role, settings window closed, and nothing else has focus
         // (or the scan field itself has focus), reclaim focus so keystrokes
         // from the USB scanner always reach the scan field.
-        if app.store.role() == DbRole::Desk && !app.settings_open {
+        if app.store.role() == DbRole::Desk && !app.settings_open && !app.db_dialog_open {
             let focused = ctx.memory(|m| m.focused());
             if focused.is_none() || focused == Some(resp.id) {
                 resp.request_focus();

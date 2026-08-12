@@ -60,6 +60,9 @@ pub fn run_gui(db_path: PathBuf, role: DbRole, soft_checkout: bool) -> Result<()
         master_preview_review: Vec::new(),
         master_preview_inside: Vec::new(),
         copy_flash: None,
+        db_dialog_open: false,
+        db_dialog_path: String::new(),
+        db_dialog_role: role,
     };
     app.event_name_draft = app.event_name.clone();
     app.station_name_draft = station_name;
@@ -104,6 +107,9 @@ pub(crate) struct AttendanceApp {
     pub(crate) master_preview_review: Vec<String>,
     pub(crate) master_preview_inside: Vec<String>,
     pub(crate) copy_flash: Option<(String, SystemTime)>,
+    pub(crate) db_dialog_open: bool,
+    pub(crate) db_dialog_path: String,
+    pub(crate) db_dialog_role: DbRole,
 }
 
 impl AttendanceApp {
@@ -378,6 +384,46 @@ impl AttendanceApp {
         }
     }
 
+    pub(crate) fn open_database(&mut self, path: PathBuf, role: DbRole) {
+        match AttendanceStore::open(&path, role, self.store.soft_checkout()) {
+            Ok(store) => self.adopt_store(store, path),
+            Err(e) => self.feedback_system("開啟資料庫失敗", e.to_string(), StatusTone::Error),
+        }
+    }
+
+    fn adopt_store(&mut self, store: AttendanceStore, db_path: PathBuf) {
+        self.store = store;
+        self.db_path = db_path;
+        self.mode = AttendanceMode::CheckIn;
+        self.scan_input.clear();
+        self.last = None;
+        self.last_scan_at = None;
+        self.recent.clear();
+        self.session_ok = 0;
+        self.session_warn = 0;
+        self.session_err = 0;
+        self.event_name = self.store.event_name();
+        self.event_name_draft = self.event_name.clone();
+        self.station_name_draft = self.store.station().station_name.clone();
+        self.sound_enabled = self.store.sound_enabled();
+        self.master_needs_review = 0;
+        self.master_still_inside = 0;
+        self.master_preview_review.clear();
+        self.master_preview_inside.clear();
+        self.copy_flash = None;
+        self.refresh_counts();
+        let role_label = if self.store.role() == DbRole::Master {
+            "主控"
+        } else {
+            "簽到站"
+        };
+        self.feedback_system(
+            "資料庫已開啟",
+            format!("{role_label} · {}", self.db_path.display()),
+            StatusTone::Success,
+        );
+    }
+
     pub(crate) fn export_master_csv_dialog(&mut self) {
         let rows = match self.store.master_rollup_rows() {
             Ok(r) => r,
@@ -435,6 +481,8 @@ impl eframe::App for AttendanceApp {
 
         // Settings floating window (UX #3) — does not shift central panel.
         ui::settings::show(self, ctx);
+
+        ui::open_db::show(self, ctx);
 
         // Central panel.
         egui::CentralPanel::default()
@@ -515,6 +563,9 @@ mod tests {
             master_preview_review: Vec::new(),
             master_preview_inside: Vec::new(),
             copy_flash: None,
+            db_dialog_open: false,
+            db_dialog_path: String::new(),
+            db_dialog_role: DbRole::Desk,
         }
     }
 
@@ -554,5 +605,26 @@ mod tests {
         app.submit_scan();
         assert!(app.recent.is_empty());
         assert_eq!(app.session_ok, 0);
+    }
+
+    #[test]
+    fn adopt_store_resets_session_state_and_switches_role() {
+        let mut app = test_app();
+        app.scan_input = "https://example.hk/?categoryCode=IA&licenseNo=T-1".into();
+        app.submit_scan();
+        assert_eq!(app.recent.len(), 1);
+        assert_eq!(app.session_ok, 1);
+
+        let master = AttendanceStore::open_in_memory(DbRole::Master).unwrap();
+        app.adopt_store(master, PathBuf::from("master.db"));
+
+        assert_eq!(app.store.role(), DbRole::Master);
+        assert_eq!(app.db_path, PathBuf::from("master.db"));
+        assert!(app.recent.is_empty(), "old DB's scans must not carry over");
+        assert_eq!(app.session_ok, 0);
+        assert_eq!(app.session_warn, 0);
+        assert_eq!(app.session_err, 0);
+        assert!(app.last.is_some(), "banner confirms the switch");
+        assert_eq!(app.master_unique, 0);
     }
 }

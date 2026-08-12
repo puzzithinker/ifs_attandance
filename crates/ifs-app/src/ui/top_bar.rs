@@ -99,6 +99,13 @@ pub fn show(app: &mut AttendanceApp, ctx: &egui::Context) {
                             }
                         });
                         ui.menu_button("檔案", |ui| {
+                            if ui.button("開啟 / 切換資料庫…").clicked() {
+                                app.db_dialog_open = true;
+                                app.db_dialog_path = app.db_path.display().to_string();
+                                app.db_dialog_role = app.store.role();
+                                ui.close_menu();
+                            }
+                            ui.separator();
                             if ui.button("匯出出席 CSV…").clicked() {
                                 app.export_csv_dialog();
                                 ui.close_menu();
