@@ -59,7 +59,7 @@
 |--------|----------------|
 | `main` | CLI (`clap`), `--smoke` / `--master` / `--db` |
 | `app` | App state, actions, `update` orchestration |
-| `ui/*` | Panels: `top_bar`, `mode_selector` (pills + scan card), `metrics`, `status_banner`, `recent_list`, `master_dashboard`, `settings` |
+| `ui/*` | Panels: `top_bar`, `mode_selector` (pills + scan card), `metrics`, `status_banner`, `recent_list`, `master_dashboard`, `settings`, `open_db` (open/switch database + role at runtime) |
 | `feedback` | Pure outcome → tone/headline/detail mapping (unit-tested) |
 | `theme` | Colors, cards, status tones |
 | `fonts` | System CJK load strategy |
@@ -188,7 +188,8 @@ Helper: `scripts/build-release.sh`
 | Domain unit | `ifs-core` `#[cfg(test)]` | Parse, decide, messages, rollup |
 | Storage unit | `ifs-storage` modules | Filename, station.toml |
 | Storage integration | `tests/storage_integration.rs` | Real rusqlite paths |
-| App | `paths` unit tests; `--smoke` CLI | No display required |
+| Crash/resume | `tests/storage_integration.rs` | Drop store → reopen same file: visits, orphans, meta, import idempotency |
+| App | `app`/`feedback`/`paths` unit tests; `--smoke` CLI | Scan vs system-message routing, store switching; no display required |
 
 ---
 

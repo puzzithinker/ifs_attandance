@@ -56,7 +56,7 @@ Keep `station_id` stable for the life of that laptop’s data. Rename only `stat
 - **Mode pills** — **入場** (green) / **離場** (orange)  
 - **QR field** — scanner + Enter  
 - **Metrics** — 目前在場 / 累計人次 / 本機成功 (desk); 總出席 / 需覆核 / 仍在場 (master)  
-- **最近一次掃描** — outcome + identity + **N 秒前**  
+- **最近結果** — outcome + identity + **N 秒前**  
 - **本機近期掃描** — last ~12 rows with **複製** (copies 類別·編號)  
 - **主控儀表板** (master only) — needs_review count + still-inside / review previews from rollup  
 
@@ -142,9 +142,9 @@ Laptop C  → Export station package ─┘
 
 **On admin laptop**
 
-```text
-ifs_attendance.exe --master --db master.db
-```
+1. Double-click `ifs_attendance.exe` (no command line needed).  
+2. **檔案 → 開啟 / 切換資料庫…** → 「建立新資料庫…」 named `master.db` → role 「主控 Master」 → 開啟.  
+   (CLI still works: `ifs_attendance.exe --master --db master.db`.)
 
 1. **檔案 → 匯入站點包…** — select all packages (safe to re-import; duplicates ignored).  
 2. Review counts (總出席 / 累計人次).  

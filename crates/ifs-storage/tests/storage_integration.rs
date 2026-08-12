@@ -5,12 +5,12 @@ use ifs_core::{
 };
 use ifs_storage::{
     default_export_filename, export_master_csv, export_station_package, import_station_package,
-    open_database, open_database_with_station, open_in_memory, DbRole, SqliteVisitRepository,
-    StationInfo,
+    open_database, open_database_with_station, open_in_memory, AttendanceStore, DbRole,
+    SqliteVisitRepository, StationInfo,
 };
 use rusqlite::Connection;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
 fn station(id: &str, name: &str) -> StationInfo {
@@ -150,7 +150,8 @@ fn soft_checkout_orphan_and_cross_station_pair() {
     // Station A: check-in only
     let path_a = dir.path().join("a.db");
     let (conn_a, _, st_a) = open_database_with_station(&path_a, DbRole::Desk).unwrap();
-    let ra = SqliteVisitRepository::new(&conn_a, st_a.clone(), DbRole::Desk).with_soft_checkout(true);
+    let ra =
+        SqliteVisitRepository::new(&conn_a, st_a.clone(), DbRole::Desk).with_soft_checkout(true);
     let id = AgentIdentity::new("IA", "MULTI1");
     ra.apply_mode(AttendanceMode::CheckIn, &id, "2026-08-08T10:00:00")
         .unwrap();
@@ -159,7 +160,8 @@ fn soft_checkout_orphan_and_cross_station_pair() {
     // Station B: soft check-out
     let path_b = dir.path().join("b.db");
     let (conn_b, _, st_b) = open_database_with_station(&path_b, DbRole::Desk).unwrap();
-    let rb = SqliteVisitRepository::new(&conn_b, st_b.clone(), DbRole::Desk).with_soft_checkout(true);
+    let rb =
+        SqliteVisitRepository::new(&conn_b, st_b.clone(), DbRole::Desk).with_soft_checkout(true);
     let o = rb
         .apply_mode(AttendanceMode::CheckOut, &id, "2026-08-08T12:00:00")
         .unwrap();
@@ -428,4 +430,201 @@ fn package_manifest_json_written() {
     let body = fs::read_to_string(man_path).unwrap();
     assert!(body.contains(&st.station_id));
     assert!(body.contains("visit_count"));
+}
+
+// Crash/resume simulation: drop the store = program closed, reopen same file = restart.
+
+fn url(cat: &str, lic: &str) -> String {
+    format!("https://example.hk/?categoryCode={cat}&licenseNo={lic}")
+}
+
+fn reopen(db: &Path, role: DbRole, soft: bool) -> AttendanceStore {
+    AttendanceStore::open(db, role, soft).unwrap()
+}
+
+#[test]
+fn restart_after_check_in_keeps_open_visit() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("agent.db");
+    let store = reopen(&db, DbRole::Desk, true);
+    let r = store.handle_scan(
+        &url("IA", "A-1"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:00:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::CheckedIn { .. }));
+    drop(store);
+
+    let store = reopen(&db, DbRole::Desk, true);
+    let c = store.counts().unwrap();
+    assert_eq!(c.currently_inside, 1);
+    assert_eq!(c.total_visits, 1);
+
+    let r = store.handle_scan(
+        &url("IA", "A-1"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:05:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::AlreadyCheckedIn { .. }));
+    assert_eq!(store.counts().unwrap().total_visits, 1);
+
+    let r = store.handle_scan(
+        &url("IA", "A-1"),
+        AttendanceMode::CheckOut,
+        "2026-08-08T12:00:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::CheckedOut { .. }));
+    assert_eq!(store.counts().unwrap().currently_inside, 0);
+}
+
+#[test]
+fn restart_after_check_out_keeps_visit_closed() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("agent.db");
+    let store = reopen(&db, DbRole::Desk, false);
+    store.handle_scan(
+        &url("IA", "A-2"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:00:00",
+    );
+    store.handle_scan(
+        &url("IA", "A-2"),
+        AttendanceMode::CheckOut,
+        "2026-08-08T12:00:00",
+    );
+    drop(store);
+
+    let store = reopen(&db, DbRole::Desk, false);
+    let c = store.counts().unwrap();
+    assert_eq!(c.currently_inside, 0);
+    assert_eq!(c.total_visits, 1);
+
+    let r = store.handle_scan(
+        &url("IA", "A-2"),
+        AttendanceMode::CheckOut,
+        "2026-08-08T13:00:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::NotCheckedIn { .. }));
+    assert_eq!(store.counts().unwrap().total_visits, 1);
+}
+
+#[test]
+fn restart_after_orphan_checkout_keeps_audit() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("agent.db");
+    let store = reopen(&db, DbRole::Desk, true);
+    let r = store.handle_scan(
+        &url("BR", "B-9"),
+        AttendanceMode::CheckOut,
+        "2026-08-08T12:00:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::OrphanCheckOut { .. }));
+    drop(store);
+
+    let store = reopen(&db, DbRole::Desk, true);
+    assert_eq!(store.counts().unwrap().total_visits, 0);
+    let rows = store.master_rollup_rows().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].identity.license_no, "B-9");
+    assert_eq!(rows[0].status, MasterStatus::OrphanOutOnly);
+}
+
+#[test]
+fn restart_keeps_event_sound_and_station_identity() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("agent.db");
+    let mut store = reopen(&db, DbRole::Desk, true);
+    store.set_event_name("CPD 下午場").unwrap();
+    store.set_sound_enabled(false).unwrap();
+    store.rename_station("出口-2").unwrap();
+    let station_id = store.station().station_id.clone();
+    drop(store);
+
+    let store = reopen(&db, DbRole::Desk, true);
+    assert_eq!(store.event_name(), "CPD 下午場");
+    assert!(!store.sound_enabled());
+    assert_eq!(store.station().station_name, "出口-2");
+    assert_eq!(store.station().station_id, station_id);
+}
+
+#[test]
+fn master_reimport_after_restart_is_idempotent() {
+    let dir = tempdir().unwrap();
+    let desk_db = dir.path().join("desk.db");
+    let desk = reopen(&desk_db, DbRole::Desk, true);
+    desk.handle_scan(
+        &url("IA", "A-1"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:00:00",
+    );
+    desk.handle_scan(
+        &url("IA", "A-2"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:01:00",
+    );
+    let pkg = dir.path().join("pkg.db");
+    desk.export_package(&pkg).unwrap();
+
+    let master_db = dir.path().join("master.db");
+    let master = reopen(&master_db, DbRole::Master, true);
+    let first = master.import_package(&pkg).unwrap();
+    assert_eq!(first.rows_inserted, 2);
+    drop(master);
+
+    let master = reopen(&master_db, DbRole::Master, true);
+    let second = master.import_package(&pkg).unwrap();
+    assert_eq!(second.rows_inserted, 0);
+    assert_eq!(second.rows_skipped, 2);
+    assert_eq!(master.counts().unwrap().total_visits, 2);
+}
+
+#[test]
+fn recheck_in_after_restart_creates_new_visit() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("agent.db");
+    let store = reopen(&db, DbRole::Desk, true);
+    store.handle_scan(
+        &url("IA", "A-4"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:00:00",
+    );
+    store.handle_scan(
+        &url("IA", "A-4"),
+        AttendanceMode::CheckOut,
+        "2026-08-08T12:00:00",
+    );
+    drop(store);
+
+    let store = reopen(&db, DbRole::Desk, true);
+    // Laptop rebooted over lunch; the agent returns and checks in again.
+    let r = store.handle_scan(
+        &url("IA", "A-4"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T14:00:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::CheckedIn { .. }));
+    let c = store.counts().unwrap();
+    assert_eq!(c.total_visits, 2);
+    assert_eq!(c.currently_inside, 1);
+}
+
+#[test]
+fn check_out_at_same_second_as_check_in_is_consistent() {
+    let dir = tempdir().unwrap();
+    let db = dir.path().join("agent.db");
+    let store = reopen(&db, DbRole::Desk, true);
+    store.handle_scan(
+        &url("IA", "A-3"),
+        AttendanceMode::CheckIn,
+        "2026-08-08T09:00:00",
+    );
+    let r = store.handle_scan(
+        &url("IA", "A-3"),
+        AttendanceMode::CheckOut,
+        "2026-08-08T09:00:00",
+    );
+    assert!(matches!(r.outcome, ScanOutcome::CheckedOut { .. }));
+    let c = store.counts().unwrap();
+    assert_eq!(c.currently_inside, 0);
+    assert_eq!(c.total_visits, 1);
 }
