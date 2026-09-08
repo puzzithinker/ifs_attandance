@@ -103,14 +103,14 @@ pub fn write_visits_csv(
     f.write_all(&[0xEF, 0xBB, 0xBF])?;
     writeln!(
         f,
-        "event,ID,保險中介人類別,保險中介人編號,入場時間,離場時間,CPD,visit_uid"
+        "event,ID,保險中介人類別,保險中介人編號,入場時間,離場時間,CPD"
     )?;
     let event = event_name.trim();
     for (i, v) in visits.iter().enumerate() {
         let out = v.check_out_at.as_deref().unwrap_or("");
         writeln!(
             f,
-            "{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{}",
             csv_escape(event),
             i + 1,
             csv_escape(&v.identity.category),
@@ -118,7 +118,6 @@ pub fn write_visits_csv(
             csv_escape(&v.check_in_at),
             csv_escape(out),
             cpd_column(policy, &v.check_in_at, v.check_out_at.as_deref()),
-            csv_escape(&v.visit_uid),
         )?;
     }
     Ok(visits.len() as u64)
@@ -239,10 +238,12 @@ mod tests {
         assert!(text.contains("event,ID,"));
         assert!(text.contains("測試活動"));
         assert!(text.contains("2026-08-08T09:00:00"));
-        // station_id dropped, CPD present but blank without a policy.
+        // station_id and visit_uid dropped; CPD present but blank without a
+        // policy, so this row ends with two empty trailing fields.
         assert!(!text.contains("station_id"));
-        assert!(text.contains("入場時間,離場時間,CPD,visit_uid"));
-        assert!(text.contains(",2026-08-08T09:00:00,,,u1"));
+        assert!(!text.contains("visit_uid"));
+        assert!(text.contains("入場時間,離場時間,CPD\n"));
+        assert!(text.contains(",2026-08-08T09:00:00,,\n"));
     }
 
     #[test]
@@ -269,9 +270,9 @@ mod tests {
             .unwrap();
         write_visits_csv(&path, &visits, "", Some(&policy)).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains(",IA,A,2026-09-10T14:30:00,2026-09-10T17:30:00,2,u-A"));
-        assert!(text.contains(",IA,B,2026-09-10T14:40:00,2026-09-10T17:09:00,0,u-B"));
-        assert!(text.contains(",IA,C,2026-09-10T14:50:00,,0,u-C"));
+        assert!(text.contains(",IA,A,2026-09-10T14:30:00,2026-09-10T17:30:00,2\n"));
+        assert!(text.contains(",IA,B,2026-09-10T14:40:00,2026-09-10T17:09:00,0\n"));
+        assert!(text.contains(",IA,C,2026-09-10T14:50:00,,0\n"));
     }
 
     #[test]

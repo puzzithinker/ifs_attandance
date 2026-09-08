@@ -174,9 +174,9 @@ fn desk_csv_cpd_column_from_configured_windows() {
     let n = store.export_csv(&path, "CPD Event").unwrap();
     assert_eq!(n, 2);
     let text = fs::read_to_string(&path).unwrap();
-    assert!(text.contains("入場時間,離場時間,CPD,visit_uid"));
-    assert!(text.contains("IA,OK1,2026-09-10T14:45:00,2026-09-10T17:20:00,2,"));
-    assert!(text.contains("IA,EARLY,2026-09-10T14:50:00,2026-09-10T16:30:00,0,"));
+    assert!(text.contains("入場時間,離場時間,CPD\n"));
+    assert!(text.contains("IA,OK1,2026-09-10T14:45:00,2026-09-10T17:20:00,2\n"));
+    assert!(text.contains("IA,EARLY,2026-09-10T14:50:00,2026-09-10T16:30:00,0\n"));
 }
 
 #[test]

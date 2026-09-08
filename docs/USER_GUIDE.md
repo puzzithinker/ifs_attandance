@@ -105,7 +105,7 @@ The card also shows **category · license**, explanation, wall time, and **how l
 **檔案 → 匯出出席 CSV…**
 
 - UTF-8 with BOM (Excel-friendly)  
-- Columns: **event**, ID, category, license, 入場/離場 times, **CPD**, visit_uid  
+- Columns: **event**, ID, category, license, 入場/離場 times, **CPD**
 - **CPD column**: with time windows configured (檢視 → 活動 / 站點設定), a visit inside **both** windows (minute-granular, inclusive) shows the event's CPD points; outside → `0`; no windows configured → blank  
 
 This export is **one laptop’s data**, not the whole venue.

@@ -139,7 +139,7 @@ These are **breaking / deliberate product changes**, not accidental drift. Opera
 | K23 | **Master rollup de-dupes by `(category, license_no)`** | `first_check_in_at = MIN(check_in_at)`; `last_check_out_at` from paired/closed visits; `stations_seen`; flag `needs_review` if open on any station or clock skew. “Did they attend?” = at least one check-in anywhere. |
 | K24 | **Soft check-out default for multi-station** | Exit desk may record check-out even if local presence is Outside (`OrphanCheckOut` event/row). Master pairs to earliest unmatched open check-in with `open_at <= close_at`. Single-desk events may leave soft check-out on (harmless) or toggle off in Settings. |
 | K25 | **Never share one live `agent.db` across machines** | No network path, OneDrive, or USB hot-swap of an open DB. Transfer only via **export package** / file copy when app is closed or package is a snapshot. |
-| K26 | **CPD eligibility = per-event time windows (owner 2026-09-08)** | Settings define optional check-in/check-out windows (`HH:MM`, inclusive, blank bound = unbounded) + CPD points (blank = 2) in `app_meta`. CSV exports gain a `CPD` column: points when check-in **and** check-out fall inside their windows, `0` otherwise, blank when no windows set. Desk CSV evaluates per visit; master CSV evaluates per agent (`first_check_in_at`/`last_check_out_at`). Desk CSV drops the `station_id` column (owner: meaningless for a single desk's export; provenance stays in the DB). |
+| K26 | **CPD eligibility = per-event time windows (owner 2026-09-08)** | Settings define optional check-in/check-out windows (`HH:MM`, inclusive, blank bound = unbounded) + CPD points (blank = 2) in `app_meta`. CSV exports gain a `CPD` column: points when check-in **and** check-out fall inside their windows, `0` otherwise, blank when no windows set. Desk CSV evaluates per visit; master CSV evaluates per agent (`first_check_in_at`/`last_check_out_at`). Desk CSV drops the `station_id` and `visit_uid` columns (owner: meaningless in a desk export; both stay in the DB — `visit_uid` remains the package-import dedupe key). |
 
 ---
 
@@ -759,9 +759,8 @@ COMMIT;
 | 入場時間 | `check_in_at` |
 | 離場時間 | `check_out_at` (empty if null) |
 | CPD | K26: points when both times inside configured windows, `0` when missed, blank when unconfigured |
-| visit_uid | `visit_uid` (audit / dedupe key) |
 
-The `station_id` column was removed (K26); provenance remains queryable in the DB.
+The `station_id` and `visit_uid` columns were removed (K26); both remain in the DB — `visit_uid` is still the package-import dedupe key.
 
 - Encoding: **UTF-8 with BOM**.
 - Default filename (K18): `IFS_AML_seminar_attendance_%d-%B.csv` with **fixed English** month names via `default_export_filename` (not OS locale)—e.g. `IFS_AML_seminar_attendance_07-August.csv`. Month map: `January`…`December`. Unit-test the month map.
