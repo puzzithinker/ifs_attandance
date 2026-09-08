@@ -3,7 +3,10 @@
 //! (raw scan string → `ScanOutcome`).
 
 use crate::export::export_master_csv;
-use crate::meta::{get_event_name, get_sound_enabled, set_event_name, set_sound_enabled};
+use crate::meta::{
+    get_cpd_config, get_event_name, get_sound_enabled, set_cpd_config, set_event_name,
+    set_sound_enabled, CpdConfig,
+};
 use crate::migrate::{drop_desk_open_unique_index, ensure_desk_open_unique_index};
 use crate::package::{
     export_station_package, import_station_package, ImportReport, PackageManifest,
@@ -139,10 +142,21 @@ impl AttendanceStore {
         self.repo().export_csv(dest, event_name)
     }
 
+    /// Raw CPD window settings from `app_meta` (blank = unset).
+    pub fn cpd_config(&self) -> Result<CpdConfig, StorageError> {
+        get_cpd_config(&self.conn)
+    }
+
+    /// Persist CPD window settings to `app_meta`.
+    pub fn set_cpd_config(&self, cfg: &CpdConfig) -> Result<(), StorageError> {
+        set_cpd_config(&self.conn, cfg)
+    }
+
     /// Write master rollup CSV; returns row count (excluding header).
     pub fn export_master_csv(&self, dest: &Path, event_name: &str) -> Result<u64, StorageError> {
         let rows = self.master_rollup_rows()?;
-        export_master_csv(dest, &rows, event_name)
+        let policy = self.repo().cpd_policy()?;
+        export_master_csv(dest, &rows, event_name, policy.as_ref())
     }
 
     /// Copy desk DB to package path and write sibling `.manifest.json`.

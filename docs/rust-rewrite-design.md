@@ -8,7 +8,7 @@
 | **Status** | Ready for Implementation |
 | **Workspace** | `/home/simon/code/ifs_attandance` |
 | **Source baseline** | `ifs_app.py` (~165 lines, Tkinter + SQLite) |
-| **Revision** | 4 — multi-laptop offline master merge (K21–K25, PR9–PR13); stakeholder OQs closed in rev 3 |
+| **Revision** | 5 — CPD time-window eligibility (K26, rev 4: multi-laptop offline master merge K21–K25) |
 
 ---
 
@@ -74,7 +74,7 @@ These are **breaking / deliberate product changes**, not accidental drift. Opera
 | Check-out | Not supported | Explicit **離場** mode |
 | Re-entry after leave | Impossible (one row forever) | New visit row allowed after check-out |
 | Feedback UI | Blocking `messagebox` every scan | **Non-blocking status banner** (throughput); export may use a short success status |
-| Count label | `已入場人數` = all rows | **目前在場** = open visits; **累計人次** = total visit rows |
+| Count label | `已入場人數` = all rows | **目前在場** = open visits; **累計人次** = distinct agents (owner: repeated scans of one person must not add up) |
 | Field clear | Always clears entry after Enter | **Always clear + refocus after every submit** (success, duplicate, invalid, empty) — matches Python clear-on-all-submits |
 | Invalid/garbage QR | Often stored as empty strings | Never persisted |
 
@@ -124,7 +124,7 @@ These are **breaking / deliberate product changes**, not accidental drift. Opera
 | K8 | **Schema English identifiers; Chinese in UI/CSV labels** | Easier Rust code; CSV keeps Chinese headers for operators. |
 | K9 | **rusqlite** for SQLite | Sync API fits single-threaded UI; mature; easy `:memory:` tests. Prefer over sqlx (async runtime unnecessary). |
 | K10 | **Single long-lived `rusqlite::Connection` on UI thread** | `eframe` app owns one `Connection` (not `Sync`—never share across threads). Set `PRAGMA busy_timeout = 5000`. **Two kiosk processes on one DB are unsupported**; SQLite locking may serialize or error—document “one instance only.” Open-per-keypress (Python style) rejected to avoid repeated migrate checks and handle churn. |
-| K11 | **Session / counts model (v1 frozen)** | One `agent.db` = one event dataset on one machine. **No `event_id`.** Counts are **all-time within the file**: `currently_inside` = `COUNT(*) WHERE check_out_at IS NULL`; `total_visits` = `COUNT(*)` (人次); `unique_agents` = `COUNT(DISTINCT category, license_no)` for diagnostics/export metadata, **not** the primary UI label. UI primary large label: **目前在場** (`currently_inside`); secondary: **累計人次** (`total_visits`). |
+| K11 | **Session / counts model (v1 frozen; metric updated by owner)** | One `agent.db` = one event dataset on one machine. **No `event_id`.** Counts are **all-time within the file**: `currently_inside` = `COUNT(*) WHERE check_out_at IS NULL`; `total_visits` = `COUNT(*)` (per-cycle rows; diagnostics/export); `unique_agents` = `COUNT(DISTINCT category, license_no)`. UI primary large label: **目前在場** (`currently_inside`); secondary: **累計人次** (`unique_agents`) — owner decision 2026-09-08: repeated in/out cycles of one person must not inflate it. |
 | K12 | **Strict QR identity (breaking vs Python)** | Both `categoryCode` and `licenseNo` required and non-empty after trim/decode; else `InvalidQr`. Whitespace-only input → `EmptyInput`. |
 | K13 | **Non-blocking status banner; no sound in v1** | No per-scan modal. Status line shows last outcome + identity. Export shows success/failure in status. **No beep/audio** (product owner final). |
 | K14 | **DB path resolution** | (1) If `--db <path>` CLI arg present, use it. (2) Else `<exe_dir>/agent.db` if exe dir is known. (3) Else `./agent.db` (cwd). Create file if missing. Log resolved path at startup and show in About. |
@@ -139,6 +139,7 @@ These are **breaking / deliberate product changes**, not accidental drift. Opera
 | K23 | **Master rollup de-dupes by `(category, license_no)`** | `first_check_in_at = MIN(check_in_at)`; `last_check_out_at` from paired/closed visits; `stations_seen`; flag `needs_review` if open on any station or clock skew. “Did they attend?” = at least one check-in anywhere. |
 | K24 | **Soft check-out default for multi-station** | Exit desk may record check-out even if local presence is Outside (`OrphanCheckOut` event/row). Master pairs to earliest unmatched open check-in with `open_at <= close_at`. Single-desk events may leave soft check-out on (harmless) or toggle off in Settings. |
 | K25 | **Never share one live `agent.db` across machines** | No network path, OneDrive, or USB hot-swap of an open DB. Transfer only via **export package** / file copy when app is closed or package is a snapshot. |
+| K26 | **CPD eligibility = per-event time windows (owner 2026-09-08)** | Settings define optional check-in/check-out windows (`HH:MM`, inclusive, blank bound = unbounded) + CPD points (blank = 2) in `app_meta`. CSV exports gain a `CPD` column: points when check-in **and** check-out fall inside their windows, `0` otherwise, blank when no windows set. Desk CSV evaluates per visit; master CSV evaluates per agent (`first_check_in_at`/`last_check_out_at`). Desk CSV drops the `station_id` column (owner: meaningless for a single desk's export; provenance stays in the DB). |
 
 ---
 
@@ -394,8 +395,8 @@ stateDiagram-v2
 | UI label | Field | SQL (conceptual) |
 |----------|-------|------------------|
 | **目前在場** (primary, large) | `currently_inside` | `SELECT COUNT(*) FROM visits WHERE check_out_at IS NULL` |
-| **累計人次** (secondary) | `total_visits` | `SELECT COUNT(*) FROM visits` |
-| (About / diagnostics only) | `unique_agents` | `SELECT COUNT(*) FROM (SELECT DISTINCT category, license_no FROM visits)` |
+| **累計人次** (secondary) | `unique_agents` | `SELECT COUNT(*) FROM (SELECT DISTINCT category, license_no FROM visits)` |
+| (About / diagnostics only) | `total_visits` | `SELECT COUNT(*) FROM visits` — one row per in→out cycle |
 
 ---
 
@@ -749,14 +750,18 @@ COMMIT;
 - Keep Python `ifs_app.exe` available but **pointed at the backup file only** if emergency fallback is needed—not at the live migrated path without reverse migration.
 
 ### CSV export (new)
-
 | Column (header) | Source |
 |-----------------|--------|
-| ID | `visits.id` |
+| event | `app_meta.event_name` (blank when unset) |
+| ID | 1-based row order |
 | 保險中介人類別 | `category` |
 | 保險中介人編號 | `license_no` |
 | 入場時間 | `check_in_at` |
 | 離場時間 | `check_out_at` (empty if null) |
+| CPD | K26: points when both times inside configured windows, `0` when missed, blank when unconfigured |
+| visit_uid | `visit_uid` (audit / dedupe key) |
+
+The `station_id` column was removed (K26); provenance remains queryable in the DB.
 
 - Encoding: **UTF-8 with BOM**.
 - Default filename (K18): `IFS_AML_seminar_attendance_%d-%B.csv` with **fixed English** month names via `default_export_filename` (not OS locale)—e.g. `IFS_AML_seminar_attendance_07-August.csv`. Month map: `January`…`December`. Unit-test the month map.

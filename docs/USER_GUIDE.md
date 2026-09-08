@@ -55,7 +55,7 @@ Keep `station_id` stable for the life of that laptop’s data. Rename only `stat
 - **檢視** menu — 全螢幕 (F11), 音效開關, **活動/站點設定**  
 - **Mode pills** — **入場** (green) / **離場** (orange)  
 - **QR field** — scanner + Enter  
-- **Metrics** — 目前在場 / 累計人次 / 本機成功 (desk); 總出席 / 需覆核 / 仍在場 (master)  
+- **Metrics** — 目前在場 / 累計人次 (distinct attendees; re-entry of the same person does not add) / 本機成功 (desk); 總出席 / 需覆核 / 仍在場 (master)  
 - **最近結果** — outcome + identity + **N 秒前**  
 - **本機近期掃描** — last ~12 rows with **複製** (copies 類別·編號)  
 - **主控儀表板** (master only) — needs_review count + still-inside / review previews from rollup  
@@ -66,6 +66,9 @@ Keep `station_id` stable for the life of that laptop’s data. Rename only `stat
 |-------|-----------|--------|
 | 活動名稱 | `app_meta.event_name` | CSV `event` column + export filename slug |
 | 站點顯示名 | `station.toml` | Shown in UI; station packages |
+| CPD 入場時間窗 | `app_meta` | e.g. `14:30`–`15:00`; blank side = unbounded |
+| CPD 離場時間窗 | `app_meta` | e.g. `17:10`–`17:30` |
+| CPD 點數 | `app_meta` | blank defaults to 2; shown in the CSV `CPD` column |
 
 Restart reloads both for the same DB folder.
 
@@ -102,9 +105,8 @@ The card also shows **category · license**, explanation, wall time, and **how l
 **檔案 → 匯出出席 CSV…**
 
 - UTF-8 with BOM (Excel-friendly)  
-- Columns: **event**, ID, category, license, 入場/離場 times, station_id, visit_uid  
-- Filename includes event slug when set, e.g. `IFS_attendance_CPD_07-August.csv`
-- Default name like `IFS_attendance_07-August.csv` (English month names)
+- Columns: **event**, ID, category, license, 入場/離場 times, **CPD**, visit_uid  
+- **CPD column**: with time windows configured (檢視 → 活動 / 站點設定), a visit inside **both** windows (minute-granular, inclusive) shows the event's CPD points; outside → `0`; no windows configured → blank  
 
 This export is **one laptop’s data**, not the whole venue.
 
@@ -147,7 +149,7 @@ Laptop C  → Export station package ─┘
    (CLI still works: `ifs_attendance.exe --master --db master.db`.)
 
 1. **檔案 → 匯入站點包…** — select all packages (safe to re-import; duplicates ignored).  
-2. Review counts (總出席 / 累計人次).  
+2. Review counts (總出席 / 需覆核 / 仍在場). For the master CSV's CPD column, set the same CPD time windows on the **master DB** (檢視 → 活動 / 站點設定).
 3. **檔案 → 匯出主控 CSV…** — one row per agent for compliance.
 
 Master CSV fields (conceptual):
@@ -158,6 +160,7 @@ Master CSV fields (conceptual):
 - stations_seen  
 - visit_count  
 - status: 已離場 / 仍在場 / 僅入場 / 僅離場(無入場)  
+- CPD: points when the agent's first check-in **and** last check-out are inside the configured windows; `0` otherwise; blank when unconfigured  
 - needs_review: `1` if staff should glance at the row  
 
 Details: [MULTI_STATION.md](./MULTI_STATION.md).
@@ -190,7 +193,7 @@ ifs_attendance.exe --smoke --db agent.db
 
 1. **Same license, different category** are **different** people.  
 2. Bad QR (empty category/license) is **rejected**, never stored.  
-3. Re-entry after check-out creates a **new** visit row.  
+3. Re-entry after check-out creates a **new** visit row — but **累計人次** still counts that person **once** (distinct attendees).
 4. Do **not** copy a live `agent.db` while the app is open; use **Export station package**.  
 5. Set PC **timezone** correctly; times are local wall clock.  
 6. Backup `agent.db` before major changes or before first open of an old Python-era DB.

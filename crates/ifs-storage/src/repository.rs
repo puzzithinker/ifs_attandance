@@ -1,10 +1,11 @@
 //! Visit repository: apply_mode, counts, CSV.
 
 use crate::export::{default_export_filename, write_visits_csv};
+use crate::meta::get_cpd_config;
 use crate::station::StationInfo;
 use ifs_core::{
-    decide_scan, AgentIdentity, AttendanceCounts, AttendanceMode, CheckoutEvent, PersistCommand,
-    ScanOutcome, VisitPresence, VisitSnapshot,
+    decide_scan, AgentIdentity, AttendanceCounts, AttendanceMode, CheckoutEvent, CpdPolicy,
+    PersistCommand, ScanOutcome, VisitPresence, VisitSnapshot,
 };
 use rusqlite::{params, Connection};
 use std::path::Path;
@@ -167,9 +168,26 @@ impl<'a> SqliteVisitRepository<'a> {
         })
     }
 
+    /// Resolve this DB's CPD policy from `app_meta`. `Ok(None)` = unconfigured.
+    /// Malformed stored settings surface as a config error (they were
+    /// validated when saved; hand-edited values must not silently blank the
+    /// CPD column).
+    pub fn cpd_policy(&self) -> Result<Option<CpdPolicy>, StorageError> {
+        let cfg = get_cpd_config(self.conn)?;
+        CpdPolicy::from_config(
+            &cfg.check_in_from,
+            &cfg.check_in_until,
+            &cfg.check_out_from,
+            &cfg.check_out_until,
+            &cfg.points,
+        )
+        .map_err(|e| StorageError::Config(e.to_string()))
+    }
+
     pub fn export_csv(&self, path: &Path, event_name: &str) -> Result<u64, StorageError> {
         let visits = self.list_visit_snapshots()?;
-        write_visits_csv(path, &visits, event_name)
+        let policy = self.cpd_policy()?;
+        write_visits_csv(path, &visits, event_name, policy.as_ref())
     }
 
     pub fn list_visit_snapshots(&self) -> Result<Vec<VisitSnapshot>, StorageError> {

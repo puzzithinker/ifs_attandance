@@ -101,9 +101,9 @@ pub enum PersistCommand {
 pub struct AttendanceCounts {
     /// Open visits: `check_out_at IS NULL`.
     pub currently_inside: u64,
-    /// Distinct `(category, license_no)` all-time in this DB file.
+    /// Distinct `(category, license_no)` all-time in this DB file — UI「累計人次」.
     pub unique_agents: u64,
-    /// Total visit rows (including closed) — UI「累計人次」.
+    /// Total visit rows (including closed); each in→out cycle adds one.
     pub total_visits: u64,
 }
 

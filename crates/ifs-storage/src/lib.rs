@@ -15,7 +15,8 @@ pub use export::{
     default_export_filename, export_master_csv, master_export_filename, sanitize_event_slug,
 };
 pub use meta::{
-    get_event_name, get_sound_enabled, set_event_name, set_sound_enabled, META_EVENT_NAME,
+    get_cpd_config, get_event_name, get_sound_enabled, set_cpd_config, set_event_name,
+    set_sound_enabled, CpdConfig, META_EVENT_NAME,
 };
 pub use migrate::{
     drop_desk_open_unique_index, ensure_desk_open_unique_index, migrate, MigrateReport,

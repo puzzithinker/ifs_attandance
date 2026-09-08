@@ -8,9 +8,10 @@ use crate::theme::{self, StatusTone};
 use crate::ui;
 use crate::ui_format::format_copy_identity;
 use eframe::egui::{self, Margin, RichText, ViewportCommand};
-use ifs_core::{AttendanceMode, MasterAgentRow, MasterStatus};
+use ifs_core::{format_hhmm, AttendanceMode, CpdPolicy, MasterAgentRow, MasterStatus};
 use ifs_storage::{
-    default_export_filename, master_export_filename, now_iso_local, AttendanceStore, DbRole,
+    default_export_filename, master_export_filename, now_iso_local, AttendanceStore, CpdConfig,
+    DbRole,
 };
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -41,7 +42,7 @@ pub fn run_gui(db_path: PathBuf, role: DbRole, soft_checkout: bool) -> Result<()
         scan_input: String::new(),
         counts_ready: false,
         counts_inside: 0,
-        counts_visits: 0,
+        counts_unique: 0,
         master_unique: 0,
         last: None,
         last_scan_at: None,
@@ -52,6 +53,11 @@ pub fn run_gui(db_path: PathBuf, role: DbRole, soft_checkout: bool) -> Result<()
         event_name,
         event_name_draft: String::new(),
         station_name_draft: String::new(),
+        cpd_in_from_draft: String::new(),
+        cpd_in_until_draft: String::new(),
+        cpd_out_from_draft: String::new(),
+        cpd_out_until_draft: String::new(),
+        cpd_points_draft: String::new(),
         settings_open: false,
         fullscreen: false,
         sound_enabled,
@@ -65,6 +71,7 @@ pub fn run_gui(db_path: PathBuf, role: DbRole, soft_checkout: bool) -> Result<()
         db_dialog_role: role,
     };
     app.event_name_draft = app.event_name.clone();
+    app.load_cpd_drafts();
     app.station_name_draft = station_name;
     app.refresh_counts();
     app.counts_ready = true;
@@ -88,7 +95,7 @@ pub(crate) struct AttendanceApp {
     pub(crate) scan_input: String,
     pub(crate) counts_ready: bool,
     pub(crate) counts_inside: u64,
-    pub(crate) counts_visits: u64,
+    pub(crate) counts_unique: u64,
     pub(crate) master_unique: u64,
     pub(crate) last: Option<ScanFeedback>,
     pub(crate) last_scan_at: Option<SystemTime>,
@@ -99,6 +106,11 @@ pub(crate) struct AttendanceApp {
     pub(crate) event_name: String,
     pub(crate) event_name_draft: String,
     pub(crate) station_name_draft: String,
+    pub(crate) cpd_in_from_draft: String,
+    pub(crate) cpd_in_until_draft: String,
+    pub(crate) cpd_out_from_draft: String,
+    pub(crate) cpd_out_until_draft: String,
+    pub(crate) cpd_points_draft: String,
     pub(crate) settings_open: bool,
     pub(crate) fullscreen: bool,
     pub(crate) sound_enabled: bool,
@@ -116,7 +128,7 @@ impl AttendanceApp {
     fn refresh_counts(&mut self) {
         if let Ok(c) = self.store.counts() {
             self.counts_inside = c.currently_inside;
-            self.counts_visits = c.total_visits;
+            self.counts_unique = c.unique_agents;
         }
         if self.store.role() == DbRole::Master {
             if let Ok(rows) = self.store.master_rollup_rows() {
@@ -247,6 +259,76 @@ impl AttendanceApp {
             self.store.station().station_name.clone(),
             StatusTone::Success,
         );
+    }
+
+    /// Reload the CPD drafts from the store (used on open and DB switch).
+    pub(crate) fn load_cpd_drafts(&mut self) {
+        let cfg = self.store.cpd_config().unwrap_or_default();
+        self.cpd_in_from_draft = cfg.check_in_from;
+        self.cpd_in_until_draft = cfg.check_in_until;
+        self.cpd_out_from_draft = cfg.check_out_from;
+        self.cpd_out_until_draft = cfg.check_out_until;
+        self.cpd_points_draft = cfg.points;
+    }
+
+    /// Validate and persist the CPD time-window drafts.
+    ///
+    /// All fields blank clears the policy (CSV `CPD` column stays empty);
+    /// a partially-blank window is allowed — a blank bound is unbounded.
+    pub(crate) fn save_cpd_config(&mut self) {
+        let cfg = CpdConfig {
+            check_in_from: self.cpd_in_from_draft.trim().to_string(),
+            check_in_until: self.cpd_in_until_draft.trim().to_string(),
+            check_out_from: self.cpd_out_from_draft.trim().to_string(),
+            check_out_until: self.cpd_out_until_draft.trim().to_string(),
+            points: self.cpd_points_draft.trim().to_string(),
+        };
+        let policy = match CpdPolicy::from_config(
+            &cfg.check_in_from,
+            &cfg.check_in_until,
+            &cfg.check_out_from,
+            &cfg.check_out_until,
+            &cfg.points,
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                self.feedback_system("CPD 設定無效", e.to_string(), StatusTone::Error);
+                return;
+            }
+        };
+        if let Err(e) = self.store.set_cpd_config(&cfg) {
+            self.feedback_system("儲存 CPD 設定失敗", e.to_string(), StatusTone::Error);
+            return;
+        }
+        self.load_cpd_drafts();
+        let (headline, detail) = match &policy {
+            None => (
+                "CPD 設定已儲存",
+                "未設定時間窗 — CSV 的 CPD 欄會留空".to_string(),
+            ),
+            Some(p) => {
+                let show = |w: &ifs_core::CpdWindow| {
+                    let f = w.from.map(format_hhmm);
+                    let u = w.until.map(format_hhmm);
+                    match (f, u) {
+                        (Some(f), Some(u)) => format!("{f}–{u}"),
+                        (Some(f), None) => format!("{f} 起"),
+                        (None, Some(u)) => format!("{u} 前"),
+                        (None, None) => "不限".to_string(),
+                    }
+                };
+                (
+                    "CPD 設定已儲存",
+                    format!(
+                        "入場 {} · 離場 {} · CPD {} 點",
+                        show(&p.check_in),
+                        show(&p.check_out),
+                        p.points
+                    ),
+                )
+            }
+        };
+        self.feedback_system(headline, detail, StatusTone::Success);
     }
 
     pub(crate) fn toggle_sound(&mut self) {
@@ -405,6 +487,7 @@ impl AttendanceApp {
         self.event_name = self.store.event_name();
         self.event_name_draft = self.event_name.clone();
         self.station_name_draft = self.store.station().station_name.clone();
+        self.load_cpd_drafts();
         self.sound_enabled = self.store.sound_enabled();
         self.master_needs_review = 0;
         self.master_still_inside = 0;
@@ -544,7 +627,7 @@ mod tests {
             scan_input: String::new(),
             counts_ready: true,
             counts_inside: 0,
-            counts_visits: 0,
+            counts_unique: 0,
             master_unique: 0,
             last: None,
             last_scan_at: None,
@@ -555,6 +638,11 @@ mod tests {
             event_name: String::new(),
             event_name_draft: String::new(),
             station_name_draft: String::new(),
+            cpd_in_from_draft: String::new(),
+            cpd_in_until_draft: String::new(),
+            cpd_out_from_draft: String::new(),
+            cpd_out_until_draft: String::new(),
+            cpd_points_draft: String::new(),
             settings_open: false,
             fullscreen: false,
             sound_enabled: false,
@@ -592,7 +680,43 @@ mod tests {
         assert_eq!(app.recent.len(), 1);
         assert_eq!(app.session_ok, 1);
         assert!(app.last_scan_at.is_some());
-        assert_eq!(app.counts_visits, 1);
+        assert_eq!(app.counts_unique, 1);
+    }
+
+    #[test]
+    fn cumulative_count_dedupes_repeated_cycles_of_same_person() {
+        let mut app = test_app();
+        let qr = "https://example.hk/?categoryCode=IA&licenseNo=T-1";
+
+        // First cycle: check-in then check-out.
+        app.mode = AttendanceMode::CheckIn;
+        app.scan_input = qr.into();
+        app.submit_scan();
+        app.mode = AttendanceMode::CheckOut;
+        app.scan_input = qr.into();
+        app.submit_scan();
+
+        // Duplicate scans while closed: check-in re-opens a visit (new row),
+        // duplicate check-outs record orphan intents only.
+        app.mode = AttendanceMode::CheckIn;
+        app.scan_input = qr.into();
+        app.submit_scan();
+        app.mode = AttendanceMode::CheckOut;
+        app.scan_input = qr.into();
+        app.submit_scan();
+        app.scan_input = qr.into();
+        app.submit_scan();
+
+        // Two visit rows exist (audit trail), but 累計人次 counts the person once.
+        assert_eq!(app.store.counts().unwrap().total_visits, 2);
+        assert_eq!(app.counts_unique, 1);
+        assert_eq!(app.counts_inside, 0);
+
+        // A different person raises the deduplicated count.
+        app.mode = AttendanceMode::CheckIn;
+        app.scan_input = "https://example.hk/?categoryCode=IA&licenseNo=T-2".into();
+        app.submit_scan();
+        assert_eq!(app.counts_unique, 2);
     }
 
     #[test]
@@ -626,5 +750,40 @@ mod tests {
         assert_eq!(app.session_err, 0);
         assert!(app.last.is_some(), "banner confirms the switch");
         assert_eq!(app.master_unique, 0);
+    }
+
+    #[test]
+    fn cpd_save_validates_then_persists_and_rejects_garbage() {
+        let mut app = test_app();
+
+        // Invalid input is rejected: nothing persisted, error banner.
+        app.cpd_in_from_draft = "25:99".into();
+        app.save_cpd_config();
+        assert_eq!(app.store.cpd_config().unwrap().check_in_from, "");
+        assert_eq!(app.last.as_ref().unwrap().tone, StatusTone::Error);
+
+        // Valid windows persist (trimmed) and reload into the drafts.
+        app.cpd_in_from_draft = " 14:30 ".into();
+        app.cpd_in_until_draft = "15:00".into();
+        app.cpd_out_from_draft = "17:10".into();
+        app.cpd_out_until_draft = "17:30".into();
+        app.cpd_points_draft = "2".into();
+        app.save_cpd_config();
+        let cfg = app.store.cpd_config().unwrap();
+        assert_eq!(cfg.check_in_from, "14:30");
+        assert_eq!(cfg.points, "2");
+        assert_eq!(app.cpd_in_from_draft, "14:30");
+        let fb = app.last.as_ref().unwrap();
+        assert_eq!(fb.tone, StatusTone::Success);
+        assert!(fb.detail.contains("入場 14:30–15:00"));
+
+        // Saving an all-blank form clears the policy.
+        app.cpd_in_from_draft.clear();
+        app.cpd_in_until_draft.clear();
+        app.cpd_out_from_draft.clear();
+        app.cpd_out_until_draft.clear();
+        app.cpd_points_draft.clear();
+        app.save_cpd_config();
+        assert_eq!(app.store.cpd_config().unwrap(), CpdConfig::default());
     }
 }

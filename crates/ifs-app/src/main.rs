@@ -70,16 +70,16 @@ fn run_smoke(db_path: &std::path::Path, role: DbRole) -> ExitCode {
             let counts = repo.counts().unwrap_or_default();
             let event = get_event_name(&conn).unwrap_or_default();
             println!(
-                "station={} ({}) migrate={}->{} inside={} visits={} event={}",
+                "station={} ({}) migrate={}->{} inside={} visits={} unique={} event={}",
                 station.station_name,
                 station.station_id,
                 report.from_version,
                 report.to_version,
                 counts.currently_inside,
                 counts.total_visits,
+                counts.unique_agents,
                 if event.is_empty() { "(none)" } else { &event }
             );
-            println!("modes: 入場 Check-In | 離場 Check-Out");
             println!("gui: event/station editors, clock, copy, master dashboard, F11, sound");
             println!(
                 "status sample: {}",

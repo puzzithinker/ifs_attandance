@@ -38,9 +38,50 @@ pub fn show(app: &mut AttendanceApp, ctx: &eframe::egui::Context) {
                     app.save_station_name();
                 }
             });
+            ui.separator();
+            ui.label(RichText::new("CPD 時間窗（匯出 CSV 的 CPD 欄）").strong().size(12.0));
+            ui.horizontal(|ui| {
+                ui.label("入場：");
+                ui.add(
+                    eframe::egui::TextEdit::singleline(&mut app.cpd_in_from_draft)
+                        .desired_width(70.0)
+                        .hint_text("14:30"),
+                );
+                ui.label("至");
+                ui.add(
+                    eframe::egui::TextEdit::singleline(&mut app.cpd_in_until_draft)
+                        .desired_width(70.0)
+                        .hint_text("15:00"),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("離場：");
+                ui.add(
+                    eframe::egui::TextEdit::singleline(&mut app.cpd_out_from_draft)
+                        .desired_width(70.0)
+                        .hint_text("17:10"),
+                );
+                ui.label("至");
+                ui.add(
+                    eframe::egui::TextEdit::singleline(&mut app.cpd_out_until_draft)
+                        .desired_width(70.0)
+                        .hint_text("17:30"),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("CPD 點數：");
+                ui.add(
+                    eframe::egui::TextEdit::singleline(&mut app.cpd_points_draft)
+                        .desired_width(70.0)
+                        .hint_text("2"),
+                );
+                if ui.button("儲存 CPD").clicked() {
+                    app.save_cpd_config();
+                }
+            });
             ui.label(
                 RichText::new(
-                    "活動名稱會寫入 app_meta，並出現在 CSV 的 event 欄與檔名。站點名寫入 station.toml。",
+                    "時間格式 HH:MM，含端點；留白＝該邊界不限。CSV 的 CPD 欄：入場且離場都在窗口內＝點數，否則 0；全部留白＝空欄。留白點數預設 2。",
                 )
                 .size(11.0)
                 .color(theme::TEXT_MUTED),

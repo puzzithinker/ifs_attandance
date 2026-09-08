@@ -23,7 +23,7 @@ pub fn show(app: &AttendanceApp, ui: &mut egui::Ui) {
         } else {
             draw_metric_card(ui, "目前在場", app.counts_inside, theme::CHECK_IN, card_w);
             ui.add_space(8.0);
-            draw_metric_card(ui, "累計人次", app.counts_visits, theme::TEXT, card_w);
+            draw_metric_card(ui, "累計人次", app.counts_unique, theme::TEXT, card_w);
             ui.add_space(8.0);
             draw_metric_card(ui, "本機成功", app.session_ok, theme::OK, card_w);
         }

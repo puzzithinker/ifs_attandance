@@ -5,7 +5,7 @@ use ifs_core::{
 };
 use ifs_storage::{
     default_export_filename, export_master_csv, export_station_package, import_station_package,
-    open_database, open_database_with_station, open_in_memory, AttendanceStore, DbRole,
+    open_database, open_database_with_station, open_in_memory, AttendanceStore, CpdConfig, DbRole,
     SqliteVisitRepository, StationInfo,
 };
 use rusqlite::Connection;
@@ -145,6 +145,56 @@ fn csv_bom_headers_and_checkout_column() {
 }
 
 #[test]
+fn desk_csv_cpd_column_from_configured_windows() {
+    let dir = tempdir().unwrap();
+    let store = AttendanceStore::open_in_memory(DbRole::Desk).unwrap();
+    store
+        .set_cpd_config(&CpdConfig {
+            check_in_from: "14:30".into(),
+            check_in_until: "15:00".into(),
+            check_out_from: "17:10".into(),
+            check_out_until: "17:30".into(),
+            points: "2".into(),
+        })
+        .unwrap();
+
+    let url = |lic: &str| format!("https://example.hk/?categoryCode=IA&licenseNo={lic}");
+    // Full session: earned.
+    let r = store.handle_scan(&url("OK1"), AttendanceMode::CheckIn, "2026-09-10T14:45:00");
+    assert!(matches!(r.outcome, ScanOutcome::CheckedIn { .. }));
+    let r = store.handle_scan(&url("OK1"), AttendanceMode::CheckOut, "2026-09-10T17:20:00");
+    assert!(matches!(r.outcome, ScanOutcome::CheckedOut { .. }));
+    // Left too early: missed.
+    let r = store.handle_scan(&url("EARLY"), AttendanceMode::CheckIn, "2026-09-10T14:50:00");
+    assert!(matches!(r.outcome, ScanOutcome::CheckedIn { .. }));
+    let r = store.handle_scan(&url("EARLY"), AttendanceMode::CheckOut, "2026-09-10T16:30:00");
+    assert!(matches!(r.outcome, ScanOutcome::CheckedOut { .. }));
+
+    let path = dir.path().join("cpd.csv");
+    let n = store.export_csv(&path, "CPD Event").unwrap();
+    assert_eq!(n, 2);
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("入場時間,離場時間,CPD,visit_uid"));
+    assert!(text.contains("IA,OK1,2026-09-10T14:45:00,2026-09-10T17:20:00,2,"));
+    assert!(text.contains("IA,EARLY,2026-09-10T14:50:00,2026-09-10T16:30:00,0,"));
+}
+
+#[test]
+fn malformed_cpd_config_fails_export_loudly() {
+    let dir = tempdir().unwrap();
+    let store = AttendanceStore::open_in_memory(DbRole::Desk).unwrap();
+    store
+        .set_cpd_config(&CpdConfig {
+            check_in_from: "bananas".into(),
+            ..CpdConfig::default()
+        })
+        .unwrap();
+    let path = dir.path().join("bad.csv");
+    let err = store.export_csv(&path, "").unwrap_err();
+    assert!(err.to_string().contains("check-in from"), "got: {err}");
+}
+
+#[test]
 fn soft_checkout_orphan_and_cross_station_pair() {
     let dir = tempdir().unwrap();
     // Station A: check-in only
@@ -206,7 +256,7 @@ fn soft_checkout_orphan_and_cross_station_pair() {
     assert_eq!(rollup.rows[0].status, MasterStatus::Left);
 
     let master_csv = dir.path().join("master.csv");
-    export_master_csv(&master_csv, &rollup.rows, "CrossDoor").unwrap();
+    export_master_csv(&master_csv, &rollup.rows, "CrossDoor", None).unwrap();
     let text = fs::read_to_string(&master_csv).unwrap();
     assert!(text.contains("MULTI1"));
     assert!(text.contains("CrossDoor"));
@@ -377,7 +427,7 @@ fn master_csv_bom_and_status_headers() {
     let rm = SqliteVisitRepository::new(&conn_m, st_m, DbRole::Master);
     let rollup = rollup_master(&rm.list_visit_snapshots().unwrap(), &[]);
     let csv_path = dir.path().join("master.csv");
-    let n = export_master_csv(&csv_path, &rollup.rows, "MasterEvt").unwrap();
+    let n = export_master_csv(&csv_path, &rollup.rows, "MasterEvt", None).unwrap();
     assert_eq!(n, 1);
     let bytes = fs::read(&csv_path).unwrap();
     assert_eq!(&bytes[0..3], &[0xEF, 0xBB, 0xBF]);

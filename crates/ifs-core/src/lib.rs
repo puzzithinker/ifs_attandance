@@ -2,12 +2,17 @@
 //!
 //! No I/O: QR parsing, check-in/check-out decisions, Chinese messages, master rollup.
 
+mod cpd;
 mod messages;
 mod model;
 mod parse;
 mod rollup;
 mod service;
 
+pub use cpd::{
+    format_hhmm, minutes_of_timestamp, parse_hhmm, CpdDecision, CpdError, CpdPolicy, CpdWindow,
+    CPD_DEFAULT_POINTS,
+};
 pub use messages::{message_zh, outcome_from_parse_error};
 pub use model::{
     AgentIdentity, AttendanceCounts, AttendanceMode, CheckoutEvent, MasterAgentRow, MasterStatus,
